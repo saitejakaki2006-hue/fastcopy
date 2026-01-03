@@ -1289,3 +1289,39 @@ def dealer_download_file(request, order_id):
         response = FileResponse(open(file_path, 'rb'), as_attachment=True, filename=f"{order.order_id}{ext}")
         return response
     except Exception as e: raise Http404(f"Error: {str(e)}")
+
+# ============================================================================
+# 🤖 SEO: robots.txt View
+# ============================================================================
+
+def robots_txt(request):
+    """
+    Serve robots.txt file for search engine crawlers
+    Includes sitemap reference and crawl rules
+    """
+    from django.http import HttpResponse
+    from django.conf import settings
+    
+    # Get the site domain from settings
+    site_url = settings.COMPANY_WEBSITE
+    if not site_url.endswith('/'):
+        site_url += '/'
+    
+    robots_content = f"""User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /cart/
+Disallow: /checkout/
+Disallow: /payment/
+Disallow: /dealer/
+Disallow: /profile/
+Disallow: /login/
+Disallow: /register/
+Disallow: /logout/
+Disallow: /media/uploads/
+
+# Sitemap location
+Sitemap: {site_url}sitemap.xml
+"""
+    
+    return HttpResponse(robots_content, content_type="text/plain")
