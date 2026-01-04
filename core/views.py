@@ -1,33 +1,24 @@
-import io, uuid, PyPDF2, base64, json, requests, hashlib, time, os
+import io, uuid, PyPDF2, base64, json, requests, hashlib, time, os, re, threading
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import JsonResponse, FileResponse, Http404, HttpResponse
 from django.contrib.auth import login, logout, authenticate
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.contrib import messages
 from django.conf import settings
-from django.http import HttpResponse, JsonResponse, FileResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives, send_mail
-from .forms import CustomUserCreationForm
-from .models import *
-from datetime import datetime, timedelta
-from decimal import Decimal
-import hashlib
-import os
-import json
-import requests
-from PyPDF2 import PdfReader
-import uuid
-import re
-import pymupdf
-import threading
-from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import Q, Sum, Count
+from .models import *
+from datetime import datetime, timedelta
+from decimal import Decimal
+from PyPDF2 import PdfReader
+import pymupdf
 from functools import wraps
 from django.db.models import Q, Sum, Count
 
