@@ -2,16 +2,33 @@ import io, uuid, PyPDF2, base64, json, requests, hashlib, time, os
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, FileResponse, Http404
 from django.contrib.auth import login, logout, authenticate
-from django.contrib.auth.models import User
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.conf import settings
+from django.http import HttpResponse, JsonResponse, FileResponse
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives, send_mail
+from .forms import CustomUserCreationForm
+from .models import *
+from datetime import datetime, timedelta
+from decimal import Decimal
+import hashlib
+import os
+import json
+import requests
+from PyPDF2 import PdfReader
+import uuid
+import re
+import pymupdf
+import threading
+from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 from functools import wraps
-from datetime import datetime, timedelta
 from django.db.models import Q, Sum, Count
 
 from django.utils import timezone
@@ -925,19 +942,10 @@ def payment_callback(request):
         # 1. Finalize the order in the database
         process_successful_order(request.user, items_involved, txn_id)
         
-        # 2. Email notifications (Async)
+        # 2. Get orders for email (but don't send yet)
         successful_orders = Order.objects.filter(transaction_id=txn_id, payment_status='Success')
-        from .notifications import send_all_order_notifications
         
-        for order in successful_orders:
-            try:
-                send_all_order_notifications(order)
-            except Exception as e:
-                print(f"⚠️ Email notification error for order {order.order_id}: {str(e)}")
-        
-        print(f"✅ Payment successful! Order processed and emails triggered.")
-        
-        # 3. Session and Cart Cleanup
+        # 3. Session and Cart Cleanup (do this BEFORE responding)
         if is_direct: 
             CartItem.objects.filter(user=request.user, document_name=direct_item.get('document_name')).delete()
             if 'direct_item' in request.session: 
@@ -953,6 +961,22 @@ def payment_callback(request):
             del request.session['applied_coupon_code']
         
         request.session.modified = True
+        
+        # 4. Send emails AFTER responding (in background thread)
+        def send_emails_async():
+            """Send emails in background thread to avoid blocking the response"""
+            from .notifications import send_all_order_notifications
+            for order in successful_orders:
+                try:
+                    send_all_order_notifications(order)
+                    print(f"✅ Email sent for order {order.order_id}")
+                except Exception as e:
+                    print(f"⚠️ Email notification error for order {order.order_id}: {str(e)}")
+        
+        # Start background thread for emails (non-blocking)
+        email_thread = threading.Thread(target=send_emails_async, daemon=True)
+        email_thread.start()
+        print(f"✅ Payment successful! Order processed. Emails sending in background.")
         
         messages.success(request, "Payment successful! Your order has been placed.")
         return redirect('profile')
